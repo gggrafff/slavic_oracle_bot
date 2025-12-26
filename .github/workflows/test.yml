@@ -1,0 +1,32 @@
+name: Lint & Type Check & Testing
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    name: flake8 & mypy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Install dependencies
+        uses: ./.github/actions/setup
+      - name: Run flake8
+        run: poetry run flake8
+      - name: Run mypy
+        run: poetry run mypy
+
+  test:
+    name: Testing with pytest
+    runs-on: ubuntu-latest
+    needs:
+      - lint
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Install dependencies
+        uses: ./.github/actions/setup
+      - name: Run pytest
+        run: poetry run pytest

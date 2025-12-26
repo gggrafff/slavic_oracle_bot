@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "SlavicOracleBot"
+description = "Metaphorical cards"
+authors = ["Anastasia Makhaeva <ness.me@ya.ru>, Anatolii Makhaev <greal-san@ya.ru>"]
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.12"
+python-telegram-bot = "^21.10"
+
+[tool.poetry.group.dev.dependencies]
+flake8 = "^7.1.2"
+mypy = "^1.15.0"
+pytest = "^8.3.5"
+pytest-asyncio = "^0.24.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
