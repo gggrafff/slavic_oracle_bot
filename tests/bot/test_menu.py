@@ -59,9 +59,9 @@ class TestMenuFunctions:
         locations = create_card_locations(sample_cards)
 
         for card, location in zip(sample_cards, locations):
-            assert card.name in location._welcome_message
-            assert card.description in location._welcome_message
-            assert card.meaning in location._welcome_message
+            assert card.name in location._welcome_message.text
+            assert card.description in location._welcome_message.text
+            assert card.meaning in location._welcome_message.text
 
     def test_create_card_locations_with_empty_list(self) -> None:
         """Test that create_card_locations handles empty list."""

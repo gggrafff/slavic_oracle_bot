@@ -1,3 +1,4 @@
+from telegram.ext._handlers.messagehandler import MessageHandler
 from bot.location import Location
 from telegram.ext._handlers.commandhandler import CommandHandler
 from telegram.ext._handlers.conversationhandler import ConversationHandler
@@ -5,7 +6,7 @@ from .menu import main_menu_location
 import logging
 
 from telegram import ReplyKeyboardRemove, Update
-from telegram.ext import ContextTypes, BaseHandler
+from telegram.ext import ContextTypes, BaseHandler, filters
 
 from utils import prepare_logging
 
@@ -43,7 +44,11 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 def create_entry_points() -> list[BaseHandler[Update, ContextTypes.DEFAULT_TYPE, object]]:
     entry_points: list[BaseHandler[Update, ContextTypes.DEFAULT_TYPE, object]]
-    entry_points = [CommandHandler("start", handle_main_menu), *main_menu_location._handlers]
+    entry_points = [
+        CommandHandler("start", handle_main_menu),
+        *main_menu_location._handlers,
+        MessageHandler(filters.Regex('.*'), handle_main_menu),
+    ]
     logger.info(f"number of entry points: {len(entry_points)}")
     return entry_points
 

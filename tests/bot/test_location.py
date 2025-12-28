@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, Mock
 from telegram import ReplyKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
-from bot.location import Location, MenuLocation, FuncLocation
+from bot.location import Location, MenuLocation, FuncLocation, Message
 
 
 class TestLocation:
@@ -17,7 +17,7 @@ class TestLocation:
         return Location(
             name="Test Location",
             handlers=[],
-            welcome_message="Welcome to test location"
+            welcome_message=Message("Welcome to test location")
         )
 
     def test_location_initialization(self) -> None:
@@ -25,11 +25,11 @@ class TestLocation:
         location = Location(
             name="Test",
             handlers=[],
-            welcome_message="Hello"
+            welcome_message=Message("Hello")
         )
 
         assert location._name == "Test"
-        assert location._welcome_message == "Hello"
+        assert location._welcome_message.text == "Hello"
         assert location._handlers == []
         assert location._is_implemented is True
 
@@ -89,15 +89,15 @@ class TestMenuLocation:
         """Create a MenuLocation instance."""
         return MenuLocation(
             name="Test Menu",
-            welcome_message="Choose an option"
+            welcome_message=Message("Choose an option")
         )
 
     def test_menu_location_initialization(self) -> None:
         """Test that MenuLocation initializes correctly."""
-        menu = MenuLocation(name="Menu", welcome_message="Welcome")
+        menu = MenuLocation(name="Menu", welcome_message=Message("Welcome"))
 
         assert menu._name == "Menu"
-        assert menu._welcome_message == "Welcome"
+        assert menu._welcome_message.text == "Welcome"
         assert menu._handlers == []
         assert menu._is_implemented is False  # Default for MenuLocation
 
@@ -107,8 +107,8 @@ class TestMenuLocation:
 
     def test_add_children_buttons_sets_children(self, menu_location: MenuLocation) -> None:
         """Test that add_children_buttons sets children correctly."""
-        child1 = MenuLocation(name="Child 1", welcome_message="Child 1")
-        child2 = MenuLocation(name="Child 2", welcome_message="Child 2")
+        child1 = MenuLocation(name="Child 1", welcome_message=Message("Child 1"))
+        child2 = MenuLocation(name="Child 2", welcome_message=Message("Child 2"))
         child1._is_implemented = True
         child2._is_implemented = True
 
@@ -119,7 +119,7 @@ class TestMenuLocation:
 
     def test_add_children_buttons_with_custom_names(self, menu_location: MenuLocation) -> None:
         """Test add_children_buttons with custom button names."""
-        child1 = MenuLocation(name="Child 1", welcome_message="Child 1")
+        child1 = MenuLocation(name="Child 1", welcome_message=Message("Child 1"))
         child1._is_implemented = True
 
         menu_location.add_children_buttons([child1], children_names=["Custom Name"])
@@ -129,7 +129,7 @@ class TestMenuLocation:
 
     def test_add_children_buttons_marks_unimplemented(self, menu_location: MenuLocation) -> None:
         """Test that unimplemented children are marked with (soon)."""
-        child = MenuLocation(name="Child", welcome_message="Child")
+        child = MenuLocation(name="Child", welcome_message=Message("Child"))
         child._is_implemented = False
 
         menu_location.add_children_buttons([child])
@@ -139,7 +139,7 @@ class TestMenuLocation:
 
     def test_get_button_names(self, menu_location: MenuLocation) -> None:
         """Test _get_button_names extracts button names correctly."""
-        child = MenuLocation(name="Child", welcome_message="Child")
+        child = MenuLocation(name="Child", welcome_message=Message("Child"))
         child._is_implemented = True
         menu_location.add_children_buttons([child])
 
@@ -157,12 +157,12 @@ class TestMenuLocation:
     def test_add_back_buttons(self, menu_location: MenuLocation) -> None:
         """Test that add_back_buttons adds back navigation."""
         # First add children buttons
-        child = MenuLocation(name="Child", welcome_message="Child")
+        child = MenuLocation(name="Child", welcome_message=Message("Child"))
         child._is_implemented = True
         menu_location.add_children_buttons([child])
 
         # Then add back button
-        parent = MenuLocation(name="Parent", welcome_message="Parent")
+        parent = MenuLocation(name="Parent", welcome_message=Message("Parent"))
         menu_location.add_back_buttons([parent])
 
         button_names = menu_location._get_button_names()
@@ -170,7 +170,7 @@ class TestMenuLocation:
 
     def test_add_back_buttons_before_children_logs_error(self, menu_location: MenuLocation) -> None:
         """Test that add_back_buttons logs error if called before children."""
-        parent = MenuLocation(name="Parent", welcome_message="Parent")
+        parent = MenuLocation(name="Parent", welcome_message=Message("Parent"))
 
         # Should not crash, but should log error
         menu_location.add_back_buttons([parent])
@@ -191,15 +191,15 @@ class TestFuncLocation:
         return FuncLocation(
             name="Func Test",
             text_func=text_processor,
-            welcome_message="Enter data"
+            welcome_message=Message("Enter data")
         )
 
     def test_func_location_initialization(self) -> None:
         """Test that FuncLocation initializes correctly."""
-        func_loc = FuncLocation(name="Test", welcome_message="Hello")
+        func_loc = FuncLocation(name="Test", welcome_message=Message("Hello"))
 
         assert func_loc._name == "Test"
-        assert func_loc._welcome_message == "Hello"
+        assert func_loc._welcome_message.text == "Hello"
         assert func_loc._redirect is None
 
     def test_func_location_str_representation(self, func_location: FuncLocation) -> None:
@@ -208,7 +208,7 @@ class TestFuncLocation:
 
     def test_set_redirect(self, func_location: FuncLocation) -> None:
         """Test that set_redirect sets the redirect location."""
-        redirect_loc = MenuLocation(name="Redirect", welcome_message="Redirected")
+        redirect_loc = MenuLocation(name="Redirect", welcome_message=Message("Redirected"))
 
         func_location.set_redirect(redirect_loc)
 
@@ -216,7 +216,7 @@ class TestFuncLocation:
 
     def test_prepare_handler_creates_handlers(self, func_location: FuncLocation) -> None:
         """Test that prepare_handler creates message handlers."""
-        redirect_loc = MenuLocation(name="Redirect", welcome_message="Redirected")
+        redirect_loc = MenuLocation(name="Redirect", welcome_message=Message("Redirected"))
         func_location.set_redirect(redirect_loc)
 
         # Before prepare_handler
@@ -230,7 +230,7 @@ class TestFuncLocation:
     @pytest.mark.asyncio
     async def test_func_location_handler_processes_text(self, func_location: FuncLocation) -> None:
         """Test that FuncLocation handler processes text correctly."""
-        redirect_loc = MenuLocation(name="Redirect", welcome_message="Redirected")
+        redirect_loc = MenuLocation(name="Redirect", welcome_message=Message("Redirected"))
         func_location.set_redirect(redirect_loc)
         func_location.prepare_handler()
 

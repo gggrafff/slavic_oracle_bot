@@ -6,8 +6,9 @@ so it might not perfectly match the current task, although it fulfills it.
 from typing import Sequence
 import logging
 from typing import Callable
+from dataclasses import dataclass
 
-from telegram import KeyboardButton, Message, ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
+from telegram import KeyboardButton, Message as TgMessage, ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
 from telegram.ext import MessageHandler, ContextTypes, BaseHandler, filters
 
 from utils import chunks, prepare_logging, unique
@@ -17,24 +18,58 @@ prepare_logging()
 logger = logging.getLogger()
 
 
+@dataclass
+class Message:
+    text: str
+    image_path: str | None = None
+
+
 class Location:
     def __init__(
             self, name: str, handlers: list[MessageHandler[ContextTypes.DEFAULT_TYPE, object]],
-            welcome_message: str, keyboard: ReplyKeyboardMarkup | ReplyKeyboardRemove = ReplyKeyboardRemove(),
+            welcome_message: Message, keyboard: ReplyKeyboardMarkup | ReplyKeyboardRemove = ReplyKeyboardRemove(),
             is_implemented: bool = True,
+            send_photo_separately: bool = False,
     ) -> None:
         self._name = name
         self._handlers = handlers
         self._welcome_message = welcome_message
         self._keyboard = keyboard
         self._is_implemented = is_implemented
+        self._send_photo_separately = send_photo_separately
 
     def __str__(self) -> str:
         return f'Location "{self._name}"'
 
-    async def send_welcome_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> Message | None:
+    async def send_welcome_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> TgMessage | None:
         if update.message:
-            return await update.message.reply_text(self._welcome_message, reply_markup=self._keyboard)
+            # If image_path is provided
+            if self._welcome_message.image_path:
+                if self._send_photo_separately:
+                    # Send text and photo as two separate messages
+                    await update.message.reply_photo(
+                        photo=open(self._welcome_message.image_path, 'rb')
+                    )
+                    return await update.message.reply_text(
+                        self._welcome_message.text,
+                        reply_markup=self._keyboard,
+                        parse_mode='HTML'
+                    )
+                else:
+                    # Send photo with text as caption (default behavior)
+                    return await update.message.reply_photo(
+                        photo=open(self._welcome_message.image_path, 'rb'),
+                        caption=self._welcome_message.text,
+                        reply_markup=self._keyboard,
+                        parse_mode='HTML'
+                    )
+            else:
+                # Otherwise send regular text message
+                return await update.message.reply_text(
+                    self._welcome_message.text,
+                    reply_markup=self._keyboard,
+                    parse_mode='HTML'
+                )
         return None
 
     def add_states(self, states: dict[object, list[BaseHandler[Update, ContextTypes.DEFAULT_TYPE, object]]]) -> None:
@@ -43,8 +78,11 @@ class Location:
 
 
 class MenuLocation(Location):
-    def __init__(self, name: str, welcome_message: str = 'Choose the tool') -> None:
-        super().__init__(name, [], welcome_message, is_implemented=False)
+    def __init__(
+        self, name: str, welcome_message: Message = Message('Choose the menu'),
+        send_photo_separately: bool = False,
+    ) -> None:
+        super().__init__(name, [], welcome_message, is_implemented=False, send_photo_separately=send_photo_separately)
 
     def __str__(self) -> str:
         return super().__str__()
@@ -85,12 +123,12 @@ class MenuLocation(Location):
         buttons_layout = list(chunks(children_buttons, 3))
         self._keyboard = ReplyKeyboardMarkup(buttons_layout)
 
-    def add_back_buttons(self, back_menus: list[Location]) -> None:
+    def add_back_buttons(self, back_menus: list[Location], pre_text: str = 'Back to ') -> None:
         if not self._handlers:
             logger.error('back buttons added before children buttons')
             return
 
-        back_buttons = [f'Back to {menu._name}' for menu in unique(back_menus)]
+        back_buttons = [f'{pre_text}{menu._name}' for menu in unique(back_menus)]
         current_handler = self._handlers[-1].callback
 
         async def new_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> object:
@@ -139,6 +177,38 @@ class MenuLocation(Location):
         buttons_layout = list(chunks([button_text], 3))
         self._keyboard = ReplyKeyboardMarkup(buttons_layout)
 
+    def add_info_button(self, button_text: str, info_text: str) -> None:
+        self._is_implemented = True
+
+        current_handler = self._handlers[-1].callback
+
+        async def new_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> object:
+            new_location = await current_handler(update, context)
+            if new_location:
+                return new_location
+
+            if update.message and update.message.text:
+                if update.message.text == button_text:
+                    logger.info(f'user {update.message.from_user} entered the {button_text}')
+                    if update.effective_chat:
+                        await context.bot.send_message(chat_id=update.effective_chat.id, text=info_text)
+                    else:
+                        logger.error('failed to send info message')
+                    return self
+            else:
+                logger.error('failed to check button name for func button')
+            return None
+
+        current_buttons = self._get_button_names()
+        buttons_regex = '|'.join([f'^{button}$' for button in (current_buttons + [button_text])])
+        self._handlers = [MessageHandler(filters.Regex(buttons_regex), new_handler)]
+
+        layout = self._get_button_layout()
+        layout.append([KeyboardButton(button_text)])
+        self._keyboard = ReplyKeyboardMarkup(layout)
+
+        logger.info(f"menu {self} has info buttons: {buttons_regex}")
+
     def _get_button_names(self) -> list[str]:
         names: list[str] = []
         if isinstance(self._keyboard, ReplyKeyboardMarkup):
@@ -183,8 +253,8 @@ class MenuLocation(Location):
 class FuncLocation(Location):
     def __init__(self, name: str, text_func: Callable[[str], str] | None = None,
                  welcome_func: Callable[[], str] | None = None,
-                 welcome_message: str = 'Input the data',
-                 error_message: str = 'Something went wrong. Try again.') -> None:
+                 welcome_message: Message = Message('Input the data'),
+                 error_message: Message = Message('Something went wrong. Try again.')) -> None:
         super().__init__(name, [], welcome_message)
         self._welcome_func = welcome_func
         self._text_func = text_func
@@ -211,7 +281,7 @@ class FuncLocation(Location):
                     )
                 except Exception as e:
                     logger.error(f'error in {self} handler: {e}')
-                    await update.message.reply_text(self._error_message)
+                    await update.message.reply_text(self._error_message.text)
             if self._redirect:
                 await self._redirect.send_welcome_message(update, context)
             return self._redirect
