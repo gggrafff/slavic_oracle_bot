@@ -177,6 +177,36 @@ class MenuLocation(Location):
         buttons_layout = list(chunks([button_text], 3))
         self._keyboard = ReplyKeyboardMarkup(buttons_layout)
 
+    def add_func_button_with_context(
+        self,
+        button_text: str,
+        func: Callable[[ContextTypes.DEFAULT_TYPE], Location],
+        children: Sequence[Location]
+    ) -> None:
+        """Like add_func_button, but passes context to the function for per-user state access."""
+        self._children = list(children)
+        self._is_implemented = any([child._is_implemented for child in children])
+        if not self._is_implemented:
+            logger.info(f'{self} is not implemented')
+
+        async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> object:
+            if update.message and update.message.text:
+                if update.message.text == button_text:
+                    logger.info(f'user {update.message.from_user} entered the {button_text}')
+                    next_location = func(context)
+                    await next_location.send_welcome_message(update, context)
+                    return next_location
+            else:
+                logger.error('failed to check button name for func button')
+            return None
+
+        buttons_regex = f'^{button_text}$'
+        self._handlers = [MessageHandler(filters.Regex(buttons_regex), menu_handler)]
+
+        logger.info(f"menu {self} has func buttons: {buttons_regex}")
+        buttons_layout = list(chunks([button_text], 3))
+        self._keyboard = ReplyKeyboardMarkup(buttons_layout)
+
     def add_info_button(self, button_text: str, info_text: str) -> None:
         self._is_implemented = True
 
