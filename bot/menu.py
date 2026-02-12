@@ -1,3 +1,5 @@
+from typing import Any
+from typing import cast
 from collections import deque
 from typing import TYPE_CHECKING
 
@@ -41,11 +43,10 @@ def create_card_locations(cards: list[Card]) -> list[MenuLocation]:
 def get_card_with_history(context: 'ContextTypes.DEFAULT_TYPE', all_cards: list[MenuLocation]) -> MenuLocation:
     """Select a card that hasn't been drawn in the last CARD_HISTORY_SIZE draws for this user."""
     # Get or create history deque for this user
-    if not context.user_data:
-        context.user_data = {}
-    if 'card_history' not in context.user_data:
-        context.user_data['card_history'] = deque(maxlen=CARD_HISTORY_SIZE)
-    history: deque[str] = context.user_data['card_history']
+    user_data = cast(dict[str, Any], context.user_data)
+    if 'card_history' not in user_data:
+        user_data['card_history'] = deque(maxlen=CARD_HISTORY_SIZE)
+    history: deque[str] = user_data['card_history']
 
     # Get cards not in recent history
     available = [c for c in all_cards if c._name not in history]
